@@ -1,0 +1,227 @@
+{% extends 'layouts/base.html' %}
+{% load static l10n %}
+
+{% block title %}Pengaturan{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <section class="section">
+        <div class="section-header">
+            <h1><i class="fas fa-cog mr-2"></i>Pengaturan Alat</h1>
+            <div class="section-header-breadcrumb">
+                <div class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></div>
+                <div class="breadcrumb-item active">Pengaturan</div>
+            </div>
+        </div>
+
+        <!-- ═══ TABS NAVIGATION ═══ -->
+        <ul class="nav nav-tabs" id="settingTabs" role="tablist">
+            {% for config in configs %}
+            <li class="nav-item">
+                <a class="nav-link {% if config.id|stringformat:'s' == active_tab %}active{% endif %}" 
+                   id="tab-{{ config.id }}" data-toggle="tab" href="#content-{{ config.id }}" 
+                   role="tab" aria-controls="content-{{ config.id }}" 
+                   aria-selected="{% if config.id|stringformat:'s' == active_tab %}true{% else %}false{% endif %}">
+                    <i class="fas fa-map-marker-alt mr-1"></i> {{ config.name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <!-- ═══ TABS CONTENT ═══ -->
+        <div class="tab-content" id="settingTabsContent">
+            {% for config in configs %}
+            <div class="tab-pane fade {% if config.id|stringformat:'s' == active_tab %}show active{% endif %}" 
+                 id="content-{{ config.id }}" role="tabpanel" aria-labelledby="tab-{{ config.id }}">
+                 
+                <form method="POST" action="{% url 'settings' %}" class="settings-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="group_id" value="{{ config.id }}">
+                    
+                    <div class="card" style="border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;">
+                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                            <h4 class="mb-0"><i class="fas fa-sliders-h mr-1"></i> Konfigurasi Sistem</h4>
+                            <div class="custom-control custom-switch mt-2 mt-md-0">
+                                <input type="checkbox" class="custom-control-input active-toggle" id="is_active_{{ config.id }}"
+                                       name="is_active" {% if config.is_active %}checked{% endif %}>
+                                <label class="custom-control-label" for="is_active_{{ config.id }}">
+                                    <strong>Status Alat: </strong> 
+                                    <span class="active-label badge badge-{% if config.is_active %}success{% else %}danger{% endif %} ml-1">
+                                        {% if config.is_active %}Aktif{% else %}Nonaktif{% endif %}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <!-- Basic Info Row -->
+                            <div class="row mb-4">
+                                <div class="col-md-6 mb-3 mb-md-0">
+                                    <label class="font-weight-bold" for="name_{{ config.id }}">Nama Area / Grup</label>
+                                    <input type="text" class="form-control" id="name_{{ config.id }}" name="name"
+                                           value="{{ config.name }}" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="font-weight-bold" for="data_send_interval_{{ config.id }}">Interval Update Data (Detik)</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fas fa-stopwatch"></i></span>
+                                        </div>
+                                        <input type="number" class="form-control" id="data_send_interval_{{ config.id }}"
+                                               name="data_send_interval" step="1" min="1"
+                                               value="{{ config.data_send_interval|default_if_none:'5' }}" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="mb-4">
+
+                            <!-- Schedules Row -->
+                            <h6 class="text-primary font-weight-bold mb-3"><i class="fas fa-clock mr-1"></i> Jadwal Operasional</h6>
+                            <div class="row mb-4">
+                                <div class="col-6 col-md-3 mb-3 mb-md-0">
+                                    <label for="on_time_{{ config.id }}">Jam Nyala</label>
+                                    <input type="time" class="form-control" id="on_time_{{ config.id }}" name="on_time"
+                                           value="{{ config.on_time|time:'H:i' }}" required>
+                                </div>
+                                <div class="col-6 col-md-3 mb-3 mb-md-0">
+                                    <label for="off_time_{{ config.id }}">Jam Mati</label>
+                                    <input type="time" class="form-control" id="off_time_{{ config.id }}" name="off_time"
+                                           value="{{ config.off_time|time:'H:i' }}" required>
+                                </div>
+                                
+                                <div class="col-12 col-md-6">
+                                    <div class="p-3 bg-light rounded dimming-card">
+                                        <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
+                                            <strong>Penjarangan (Ch 2)</strong>
+                                            <div class="custom-control custom-switch">
+                                                <input type="checkbox" class="custom-control-input dimming-toggle" id="dimming_enabled_{{ config.id }}"
+                                                       name="dimming_enabled" {% if config.dimming_enabled %}checked{% endif %}>
+                                                <label class="custom-control-label" for="dimming_enabled_{{ config.id }}">
+                                                    <span class="dimming-label badge badge-{% if config.dimming_enabled %}primary{% else %}secondary{% endif %}">
+                                                        {% if config.dimming_enabled %}Aktif{% else %}Nonaktif{% endif %}
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="row dimming-fields" {% if not config.dimming_enabled %}style="opacity:0.5;pointer-events:none;"{% endif %}>
+                                            <div class="col-6">
+                                                <label for="dimming_start_{{ config.id }}"><small>Mulai (Mati)</small></label>
+                                                <input type="time" class="form-control form-control-sm" id="dimming_start_{{ config.id }}" name="dimming_start"
+                                                       value="{{ config.dimming_start|time:'H:i' }}">
+                                            </div>
+                                            <div class="col-6">
+                                                <label for="dimming_end_{{ config.id }}"><small>Selesai (Nyala)</small></label>
+                                                <input type="time" class="form-control form-control-sm" id="dimming_end_{{ config.id }}" name="dimming_end"
+                                                       value="{{ config.dimming_end|time:'H:i' }}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="mb-4">
+
+                            <!-- Thresholds Row -->
+                            <h6 class="text-primary font-weight-bold mb-3"><i class="fas fa-exclamation-triangle mr-1"></i> Ambang Batas Notifikasi (Minimum)</h6>
+                            <p class="text-muted small mb-3">Tentukan batas bawah arus (A). Jika nilai bacaan di bawah angka ini (saat jadwal nyala), sistem akan menganggap ada lampu yang mati atau kabel putus.</p>
+                            
+                            <div class="row">
+                                <!-- Channel 1 -->
+                                <div class="col-6">
+                                    <div class="border rounded p-3" style="border-left: 4px solid #36a2eb !important;">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong style="color: #36a2eb;">Channel 1 (Utama)</strong>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <label for="ch1_current_min_{{ config.id }}"><small>Arus (A)</small></label>
+                                                {% localize off %}
+                                                <input type="number" class="form-control form-control-sm" id="ch1_current_min_{{ config.id }}"
+                                                       name="ch1_current_min" step="0.01" min="0" value="{{ config.ch1_current_min }}" required>
+                                                {% endlocalize %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Channel 2 -->
+                                <div class="col-6">
+                                    <div class="border rounded p-3" style="border-left: 4px solid #ffa426 !important;">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong class="text-warning">Channel 2 (Penjarangan)</strong>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <label for="ch2_current_min_{{ config.id }}"><small>Arus (A)</small></label>
+                                                {% localize off %}
+                                                <input type="number" class="form-control form-control-sm" id="ch2_current_min_{{ config.id }}"
+                                                       name="ch2_current_min" step="0.01" min="0" value="{{ config.ch2_current_min }}" required>
+                                                {% endlocalize %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        
+                        <div class="card-footer bg-whitesmoke text-md-right text-center">
+                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
+                                <small class="text-muted mb-3 mb-md-0 text-left">
+                                    <i class="fas fa-history mr-1"></i> Terakhir diubah: {{ config.updated_at|date:"d/m/Y H:i:s" }}
+                                </small>
+                                <div class="w-100 w-md-auto">
+                                    <a href="{% url 'dashboard' %}" class="btn btn-secondary mr-2 px-4">Batal</a>
+                                    <button type="submit" class="btn btn-primary px-4"><i class="fas fa-save mr-1"></i> Simpan</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+(function() {
+    // Handling dimming toggles
+    var dimmingToggles = document.querySelectorAll('.dimming-toggle');
+    dimmingToggles.forEach(function(toggle) {
+        toggle.addEventListener('change', function() {
+            var card = this.closest('.dimming-card');
+            var dimmingFields = card.querySelector('.dimming-fields');
+            var dimmingLabel = card.querySelector('.dimming-label');
+            
+            if (this.checked) {
+                dimmingFields.style.opacity = '1';
+                dimmingFields.style.pointerEvents = 'auto';
+                dimmingLabel.textContent = 'Aktif';
+                dimmingLabel.className = 'dimming-label badge badge-primary';
+            } else {
+                dimmingFields.style.opacity = '0.5';
+                dimmingFields.style.pointerEvents = 'none';
+                dimmingLabel.textContent = 'Nonaktif';
+                dimmingLabel.className = 'dimming-label badge badge-secondary';
+            }
+        });
+    });
+
+    // Handling active toggles
+    var activeToggles = document.querySelectorAll('.active-toggle');
+    activeToggles.forEach(function(toggle) {
+        toggle.addEventListener('change', function() {
+            var wrapper = this.closest('.custom-control');
+            var activeLabel = wrapper.querySelector('.active-label');
+            
+            activeLabel.textContent = this.checked ? 'Aktif' : 'Nonaktif';
+            activeLabel.className = 'active-label badge ml-1 badge-' + (this.checked ? 'success' : 'danger');
+        });
+    });
+})();
+</script>
+{% endblock %}

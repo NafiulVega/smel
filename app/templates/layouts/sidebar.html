@@ -14,6 +14,23 @@
                     <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
                 </a>
             </li>
+            <li class="menu-header">Riwayat</li>
+            <li class="{% if request.resolver_match.url_name == 'sensor-logs' %}active{% endif %}">
+                <a class="nav-link" href="{% url 'sensor-logs' %}">
+                    <i class="fas fa-database"></i><span>Log Sensor</span>
+                </a>
+            </li>
+            <li class="{% if request.resolver_match.url_name == 'notification-logs' %}active{% endif %}">
+                <a class="nav-link" href="{% url 'notification-logs' %}">
+                    <i class="fas fa-bell"></i><span>Log Notifikasi</span>
+                </a>
+            </li>
+            <li class="menu-header">Konfigurasi</li>
+            <li class="{% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+                <a class="nav-link" href="{% url 'settings' %}">
+                    <i class="fas fa-cog"></i><span>Pengaturan</span>
+                </a>
+            </li>
         </ul>
     </aside>
 </div>

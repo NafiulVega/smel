@@ -5,6 +5,7 @@ from django.shortcuts import redirect
 EXEMPT_URLS = [
     '/api/relay-status',
     '/api/sensor-data',
+    '/api/efficiency-summary',
 ]
 
 

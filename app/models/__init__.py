@@ -1,13 +1,11 @@
 from .model_user import User
-from .model_group import Group
-from .model_channel import Channel
-from .model_sensor_reading import SensorReading
-from .model_notification import Notification
+from .model_group_config import GroupConfig
+from .model_sensor_log import SensorLog
+from .model_notification_log import NotificationLog
 
 __all__ = [
     'User',
-    'Group',
-    'Channel',
-    'SensorReading',
-    'Notification',
+    'GroupConfig',
+    'SensorLog',
+    'NotificationLog',
 ]

@@ -1,0 +1,194 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}Log Notifikasi{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <section class="section">
+        <div class="section-header">
+            <h1><i class="fas fa-bell mr-2"></i>Log Notifikasi</h1>
+            <div class="section-header-breadcrumb">
+                <div class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></div>
+                <div class="breadcrumb-item active">Log Notifikasi</div>
+            </div>
+        </div>
+
+        <!-- ═══ FILTER ═══ -->
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-filter mr-1"></i> Filter</h4>
+                <div class="card-header-action">
+                    <span class="badge badge-primary">{{ total_count }} total</span>
+                    {% if active_count > 0 %}
+                    <span class="badge badge-danger ml-1">{{ active_count }} aktif</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{% url 'notification-logs' %}" class="row align-items-end">
+                    <div class="col-md-2">
+                        <div class="form-group mb-0">
+                            <label for="type">Tipe</label>
+                            <select class="form-control" id="type" name="type">
+                                <option value="">Semua</option>
+                                <option value="N1" {% if notif_type == 'N1' %}selected{% endif %}>N1 - Arus Rendah</option>
+                                <option value="N2" {% if notif_type == 'N2' %}selected{% endif %}>N2 - Sensor Error</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group mb-0">
+                            <label for="status">Status</label>
+                            <select class="form-control" id="status" name="status">
+                                <option value="">Semua</option>
+                                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Aktif</option>
+                                <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Resolved</option>
+                                <option value="dismissed" {% if status_filter == 'dismissed' %}selected{% endif %}>Dismissed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group mb-0">
+                            <label for="channel">Channel</label>
+                            <select class="form-control" id="channel" name="channel">
+                                <option value="">Semua</option>
+                                <option value="1" {% if channel == '1' %}selected{% endif %}>Channel 1</option>
+                                <option value="2" {% if channel == '2' %}selected{% endif %}>Channel 2</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="submit" class="btn btn-primary mr-1">
+                            <i class="fas fa-search mr-1"></i> Filter
+                        </button>
+                        <a href="{% url 'notification-logs' %}" class="btn btn-secondary mr-1">
+                            <i class="fas fa-redo mr-1"></i> Reset
+                        </a>
+                        {% if active_count > 0 %}
+                        <form method="POST" action="{% url 'dismiss-all-notifications' %}" class="d-inline" id="dismiss-all-form">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning"
+                                    onclick="return confirm('Dismiss semua {{ active_count }} notifikasi aktif?');">
+                                <i class="fas fa-check-double mr-1"></i> Dismiss Semua ({{ active_count }})
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ═══ TABEL ═══ -->
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width:50px;">#</th>
+                                <th>Channel</th>
+                                <th>Tipe</th>
+                                <th>Pesan</th>
+                                <th>Waktu</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-center" style="width:100px;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for notif in page_obj %}
+                            <tr>
+                                <td class="text-center text-muted">{{ notif.id }}</td>
+                                <td>
+                                    {% if notif.channel == 1 %}
+                                    <span class="badge badge-info">Ch1</span>
+                                    {% else %}
+                                    <span class="badge badge-primary" style="background:#6f42c1;">Ch2</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if notif.type == 'N1' %}
+                                    <span class="badge badge-warning">N1</span> Arus Rendah
+                                    {% elif notif.type == 'N2' %}
+                                    <span class="badge badge-danger">N2</span> Sensor Error
+                                    {% endif %}
+                                </td>
+                                <td class="text-small">{{ notif.message|truncatewords:20 }}</td>
+                                <td class="text-small">{{ notif.created_at|date:"d/m/Y H:i:s" }}</td>
+                                <td class="text-center">
+                                    {% if notif.status == 'active' %}
+                                    <span class="badge badge-danger">Aktif</span>
+                                    {% elif notif.status == 'resolved' %}
+                                    <span class="badge badge-success">Resolved</span>
+                                    {% elif notif.status == 'dismissed' %}
+                                    <span class="badge badge-secondary">Dismissed</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if notif.status == 'active' %}
+                                    <form method="POST" action="{% url 'dismiss-notification' notif.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-warning"
+                                                title="Dismiss notifikasi ini">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="fas fa-bell-slash fa-2x mb-2 d-block"></i>
+                                    Belum ada notifikasi
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% if page_obj.has_other_pages %}
+            <div class="card-footer text-center">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > page_obj.number|add:"-4" and num < page_obj.number|add:"4" %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <small class="text-muted">
+                    Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}
+                    &middot; Total {{ total_count }} data
+                </small>
+            </div>
+            {% endif %}
+        </div>
+
+    </section>
+</div>
+{% endblock %}

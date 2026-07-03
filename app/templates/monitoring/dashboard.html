@@ -1,0 +1,947 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard Monitoring{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <section class="section">
+        <div class="section-header">
+            <h1><i class="fas fa-tachometer-alt mr-2"></i>Dashboard Monitoring</h1>
+            <div class="section-header-breadcrumb">
+                <div class="mr-3 d-flex align-items-center" id="ws-indicator">
+                    <span class="badge badge-sm mr-1" id="ws-dot" style="width:10px;height:10px;border-radius:50%;background:#dc3545;display:inline-block;"></span>
+                    <small class="text-muted" id="ws-text">Terputus</small>
+                </div>
+                <div class="breadcrumb-item active"><i class="fas fa-clock mr-1"></i><span id="server-clock">--:--:--</span></div>
+            </div>
+        </div>
+
+        <!-- ═══ NOTIFICATION BANNER ═══ -->
+        <div id="notif-panel" class="mb-4" style="display:none;">
+            <div class="alert alert-warning alert-has-icon alert-dismissible">
+                <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="alert-body">
+                    <div class="alert-title">Peringatan Aktif <span class="badge badge-danger ml-1" id="notif-count">0</span></div>
+                    <div id="notif-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ STATUS ROW ═══ -->
+        <div class="row">
+            <!-- Group Status -->
+            <div class="col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="card card-statistic-1">
+                    <div class="card-icon bg-primary" id="group-icon-bg">
+                        <i class="fas fa-lightbulb"></i>
+                    </div>
+                    <div class="card-wrap">
+                        <div class="card-header">
+                            <h4>{{ config.name|default:"Jalan Nasional" }}</h4>
+                        </div>
+                        <div class="card-body" id="group-status-text">
+                            {{ group_status|default:"MATI" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Jadwal -->
+            <div class="col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="card card-statistic-1">
+                    <div class="card-icon bg-info">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="card-wrap">
+                        <div class="card-header">
+                            <h4>Jadwal Nyala</h4>
+                        </div>
+                        <div class="card-body">
+                            <span id="schedule-on">{{ on_time|default:"--:--" }}</span> &mdash; <span id="schedule-off">{{ off_time|default:"--:--" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Penjarangan -->
+            <div class="col-lg-4 col-md-6 col-sm-6 col-12">
+                <div class="card card-statistic-1">
+                    <div class="card-icon bg-warning" id="dimming-icon-bg">
+                        <i class="fas fa-adjust"></i>
+                    </div>
+                    <div class="card-wrap">
+                        <div class="card-header">
+                            <h4>Penjarangan</h4>
+                        </div>
+                        <div class="card-body" id="dimming-status-text">
+                            {% if dimming_enabled %}Aktif ({{ dimming_start }} - {{ dimming_end }}){% else %}Nonaktif{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ CHANNEL CARDS ═══ -->
+        <div class="row">
+            <!-- Channel 1 -->
+            <div class="col-lg-6 col-md-12">
+                <div class="card" id="card-ch1">
+                    <div class="card-header">
+                        <h4>
+                            <span id="lamp-ch1" style="font-size:1.2em;">&#x1F4A1;</span>
+                            Channel 1 <small class="text-muted">Pin 13 &middot; UART2 &middot; Jalur Utama</small>
+                        </h4>
+                        <div class="card-header-action">
+                            <span class="badge" id="relay-badge-ch1">OFF</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4 col-sm-4 mb-3">
+                                <div class="text-muted text-small">Tegangan</div>
+                                <div class="font-weight-bold h5 mb-0" id="v-ch1">--</div>
+                                <div class="text-muted text-small">V</div>
+                            </div>
+                            <div class="col-4 col-sm-4 mb-3">
+                                <div class="text-muted text-small">Arus</div>
+                                <div class="font-weight-bold h5 mb-0 text-info" id="a-ch1">--</div>
+                                <div class="text-muted text-small">A</div>
+                            </div>
+                            <div class="col-4 col-sm-4 mb-3">
+                                <div class="text-muted text-small">Daya</div>
+                                <div class="font-weight-bold h5 mb-0 text-warning" id="w-ch1">--</div>
+                                <div class="text-muted text-small">W</div>
+                            </div>
+                            <div class="col-4 col-sm-4">
+                                <div class="text-muted text-small">Energi</div>
+                                <div class="font-weight-bold h5 mb-0 text-success" id="kwh-ch1">--</div>
+                                <div class="text-muted text-small">kWh</div>
+                            </div>
+                            <div class="col-4 col-sm-4">
+                                <div class="text-muted text-small">Frekuensi</div>
+                                <div class="font-weight-bold h5 mb-0 text-purple" id="hz-ch1">--</div>
+                                <div class="text-muted text-small">Hz</div>
+                            </div>
+                            <div class="col-4 col-sm-4">
+                                <div class="text-muted text-small">PF</div>
+                                <div class="font-weight-bold h5 mb-0 text-primary" id="pf-ch1">--</div>
+                                <div class="text-muted text-small">&nbsp;</div>
+                            </div>
+                        </div>
+                        <div class="text-right mt-1">
+                            <small class="text-muted">Terakhir diubah: <span id="time-ch1">--</span></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channel 2 -->
+            <div class="col-lg-6 col-md-12">
+                <div class="card" id="card-ch2">
+                    <div class="card-header">
+                        <h4>
+                            <span id="lamp-ch2" style="font-size:1.2em;">&#x1F4A1;</span>
+                            Channel 2 <small class="text-muted">Pin 12 &middot; UART1 &middot; Jalur Penjarangan</small>
+                        </h4>
+                        <div class="card-header-action">
+                            <span class="badge" id="relay-badge-ch2">OFF</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4 col-sm-4 mb-3">
+                                <div class="text-muted text-small">Tegangan</div>
+                                <div class="font-weight-bold h5 mb-0" id="v-ch2">--</div>
+                                <div class="text-muted text-small">V</div>
+                            </div>
+                            <div class="col-4 col-sm-4 mb-3">
+                                <div class="text-muted text-small">Arus</div>
+                                <div class="font-weight-bold h5 mb-0 text-info" id="a-ch2">--</div>
+                                <div class="text-muted text-small">A</div>
+                            </div>
+                            <div class="col-4 col-sm-4 mb-3">
+                                <div class="text-muted text-small">Daya</div>
+                                <div class="font-weight-bold h5 mb-0 text-warning" id="w-ch2">--</div>
+                                <div class="text-muted text-small">W</div>
+                            </div>
+                            <div class="col-4 col-sm-4">
+                                <div class="text-muted text-small">Energi</div>
+                                <div class="font-weight-bold h5 mb-0 text-success" id="kwh-ch2">--</div>
+                                <div class="text-muted text-small">kWh</div>
+                            </div>
+                            <div class="col-4 col-sm-4">
+                                <div class="text-muted text-small">Frekuensi</div>
+                                <div class="font-weight-bold h5 mb-0 text-purple" id="hz-ch2">--</div>
+                                <div class="text-muted text-small">Hz</div>
+                            </div>
+                            <div class="col-4 col-sm-4">
+                                <div class="text-muted text-small">PF</div>
+                                <div class="font-weight-bold h5 mb-0 text-primary" id="pf-ch2">--</div>
+                                <div class="text-muted text-small">&nbsp;</div>
+                            </div>
+                        </div>
+                        <div class="text-right mt-1">
+                            <small class="text-muted">Terakhir diubah: <span id="time-ch2">--</span></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ═══ CHARTS ═══ -->
+        <div class="row">
+            <!-- Power Chart -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Daya (W)</h4>
+                        <div class="card-header-action">
+                            <small class="text-muted" id="last-update">Menunggu data...</small>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="chart-power" height="180"></canvas>
+                    </div>
+                </div>
+            </div>
+            <!-- Current Chart -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header"><h4>Arus (A)</h4></div>
+                    <div class="card-body">
+                        <canvas id="chart-current" height="180"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Voltage Chart -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header"><h4>Tegangan (V)</h4></div>
+                    <div class="card-body">
+                        <canvas id="chart-voltage" height="180"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Efisiensi Energi Chart -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Efisiensi Energi (%)</h4>
+                        <div class="card-header-action">
+                            <button type="button" class="btn btn-info btn-sm" data-toggle="modal" data-target="#effModal" title="Lihat Rumus Perhitungan">
+                                <i class="fas fa-info-circle"></i> Rumus
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Spinner & Error container -->
+                        <div id="eff-loader" class="text-center" style="padding-top: 50px; padding-bottom: 50px;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="sr-only">Loading...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Memuat data efisiensi...</p>
+                        </div>
+                        <div id="eff-error" class="text-center" style="display:none; padding-top: 50px; padding-bottom: 50px;">
+                            <div class="text-danger mb-2"><i class="fas fa-exclamation-triangle fa-2x"></i></div>
+                            <p class="text-danger" id="eff-error-msg">Gagal memuat data.</p>
+                            <button class="btn btn-primary btn-sm" onclick="fetchEfficiencyData()">Coba Lagi</button>
+                        </div>
+                        <!-- Canvas container -->
+                        <div id="eff-chart-container" style="display:none;">
+                            <canvas id="chart-efficiency-v2" height="180"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </section>
+</div>
+{% endblock %}
+
+{% block script %}
+<!-- Chart.js CDN (versi terbaru, tidak bentrok dengan chart.min.js bawaan Stisla) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+<style>
+    /* Lamp glow animation */
+    @keyframes lampGlow {
+        0%, 100% { text-shadow: 0 0 6px rgba(255,193,7,0.6); }
+        50% { text-shadow: 0 0 16px rgba(255,193,7,0.95); }
+    }
+    .lamp-on { animation: lampGlow 2s ease-in-out infinite; }
+    .lamp-off { opacity: 0.3; }
+
+    /* Value flash on update */
+    @keyframes valueFlash {
+        0% { color: #6777ef; }
+        100% { color: inherit; }
+    }
+    .value-updated { animation: valueFlash 0.5s ease-out; }
+
+    /* Notification entry */
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .notif-enter { animation: slideDown 0.3s ease-out; }
+
+    /* Purple text util (not in Stisla) */
+    .text-purple { color: #6f42c1 !important; }
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    const MAX_POINTS = 30;
+    const WS_RECONNECT_MS = 3000;
+
+    let ws = null;
+    let wsTimer = null;
+    let lastUpdateTime = null;
+
+    // ── Server Clock ──
+    function tickClock() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2,'0');
+        const mm = String(now.getMinutes()).padStart(2,'0');
+        const ss = String(now.getSeconds()).padStart(2,'0');
+        document.getElementById('server-clock').textContent = hh+':'+mm+':'+ss;
+
+        if (lastUpdateTime) {
+            const diff = Math.floor((now - lastUpdateTime) / 1000);
+            const el = document.getElementById('last-update');
+            if (diff < 5)       { el.textContent = 'Baru saja'; el.className = 'text-success'; }
+            else if (diff < 60) { el.textContent = diff + ' detik lalu'; el.className = 'text-muted'; }
+            else                { el.textContent = Math.floor(diff/60) + ' menit lalu'; el.className = 'text-warning'; }
+        }
+    }
+    setInterval(tickClock, 1000);
+    tickClock();
+
+    // ── WebSocket ──
+    function connectWS() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(proto + '//' + location.host + '/ws/dashboard/');
+
+        ws.onopen = function() {
+            setWsStatus(true);
+            if (wsTimer) { clearTimeout(wsTimer); wsTimer = null; }
+        };
+        ws.onmessage = function(e) {
+            try { handleMsg(JSON.parse(e.data)); } catch(err) { console.error('[WS]', err); }
+        };
+        ws.onclose = function() {
+            setWsStatus(false);
+            wsTimer = setTimeout(connectWS, WS_RECONNECT_MS);
+        };
+        ws.onerror = function() { ws.close(); };
+    }
+
+    function setWsStatus(ok) {
+        var dot = document.getElementById('ws-dot');
+        var txt = document.getElementById('ws-text');
+        if (ok) {
+            dot.style.background = '#47c363';
+            txt.textContent = 'Terhubung';
+            txt.className = 'text-success';
+        } else {
+            dot.style.background = '#dc3545';
+            txt.textContent = 'Terputus';
+            txt.className = 'text-danger';
+        }
+    }
+
+    var lastWsTime = 0;
+    var dataSendIntervalMs = ({{ data_send_interval|default:5 }}) * 1000;
+    var watchdogTimeoutMs = dataSendIntervalMs + 10000; // Beri toleransi 10 detik
+
+    // Watchdog timer: jika data berhenti mengalir melebihi batas waktu (ESP32 OFF/Offline),
+    // paksa update UI agar relay berubah menjadi OFF
+    setInterval(function() {
+        if (lastWsTime > 0 && Date.now() - lastWsTime > watchdogTimeoutMs) {
+            updateGroupStatus("MATI");
+            updateChannels([]);
+            var nowISO = new Date();
+            nowISO.setMinutes(nowISO.getMinutes() - nowISO.getTimezoneOffset());
+            updateCharts([], nowISO.toISOString().slice(0, 19), false);
+            lastWsTime = 0; 
+        }
+    }, 5000);
+
+    // ── Message Handler ──
+    function handleMsg(data) {
+        if (data.type === 'sensor_update') {
+            lastWsTime = Date.now();
+            updateGroupStatus(data.group_status);
+            updateChannels(data.channels || []);
+            updateCharts(data.channels || [], data.timestamp);
+            updateNotifications(data.active_alerts || []);
+            lastUpdateTime = new Date();
+        } else if (data.type === 'notification_new') {
+            appendNotifications(data.alerts || []);
+        }
+    }
+
+    // ── Group Status ──
+    function updateGroupStatus(status) {
+        var el = document.getElementById('group-status-text');
+        var bg = document.getElementById('group-icon-bg');
+        el.textContent = status;
+        bg.className = 'card-icon ' + ({
+            'NYALA': 'bg-success', 'MATI': 'bg-danger', 'PENJARANGAN': 'bg-warning'
+        }[status] || 'bg-secondary');
+    }
+
+    // ── Channels ──
+    function updateChannels(channels) {
+        [1, 2].forEach(function(n) {
+            var ch = channels.find(function(c) { return c.channel === n; });
+            var relayOn = ch ? ch.relay_on : false;
+            var sensorOk = ch ? ch.sensor_ok : false;
+
+            // Relay badge
+            var badge = document.getElementById('relay-badge-ch'+n);
+            if (relayOn) {
+                badge.textContent = 'ON';
+                badge.className = 'badge badge-success';
+            } else {
+                badge.textContent = 'OFF';
+                badge.className = 'badge badge-secondary';
+            }
+
+            // Lamp
+            var lamp = document.getElementById('lamp-ch'+n);
+            if (relayOn && sensorOk) {
+                lamp.className = 'lamp-on';
+                lamp.innerHTML = '&#x1F4A1;';
+            } else if (relayOn && !sensorOk) {
+                lamp.className = '';
+                lamp.innerHTML = '&#x26A0;&#xFE0F;';
+            } else {
+                lamp.className = 'lamp-off';
+                lamp.innerHTML = '&#x1F4A1;';
+            }
+
+            // Card border
+            var card = document.getElementById('card-ch'+n);
+            if (relayOn && sensorOk) card.style.borderLeft = '4px solid #47c363';
+            else if (relayOn && !sensorOk) card.style.borderLeft = '4px solid #fc544b';
+            else card.style.borderLeft = '';
+
+            // Sensor values
+            var fields = {
+                'v': { val: ch ? ch.voltage : null, fmt: function(v){return v!==null?v.toFixed(1):'--';} },
+                'a': { val: ch ? ch.current : null, fmt: function(v){return v!==null?v.toFixed(3):'--';} },
+                'w': { val: ch ? ch.power : null, fmt: function(v){return v!==null?v.toFixed(1):'--';} },
+                'kwh': { val: ch ? ch.energy : null, fmt: function(v){return v!==null?v.toFixed(3):'--';} },
+                'hz': { val: ch ? ch.frequency : null, fmt: function(v){return v!==null?v.toFixed(1):'--';} },
+                'pf': { val: ch ? ch.pf : null, fmt: function(v){return v!==null?v.toFixed(2):'--';} },
+            };
+            for (var key in fields) {
+                var el = document.getElementById(key+'-ch'+n);
+                if (el) {
+                    var nv = fields[key].fmt(fields[key].val);
+                    if (el.textContent !== nv) {
+                        el.textContent = nv;
+                        el.classList.remove('value-updated');
+                        void el.offsetWidth;
+                        el.classList.add('value-updated');
+                    }
+                }
+            }
+
+            // Update timestamp on card
+            var timeEl = document.getElementById('time-ch'+n);
+            if (timeEl && ch && ch.updated_at) {
+                var d = new Date(ch.updated_at);
+                if (!isNaN(d)) {
+                    var dd = String(d.getDate()).padStart(2, '0');
+                    var mm = String(d.getMonth() + 1).padStart(2, '0');
+                    var yyyy = d.getFullYear();
+                    var hh = String(d.getHours()).padStart(2, '0');
+                    var mins = String(d.getMinutes()).padStart(2, '0');
+                    var ss = String(d.getSeconds()).padStart(2, '0');
+                    timeEl.textContent = dd + '/' + mm + '/' + yyyy + ' ' + hh + ':' + mins + ':' + ss;
+                }
+            }
+        });
+    }
+
+    // ── Notifications ──
+    function updateNotifications(alerts) {
+        var panel = document.getElementById('notif-panel');
+        var list = document.getElementById('notif-list');
+        var count = document.getElementById('notif-count');
+        if (!alerts || alerts.length === 0) { panel.style.display = 'none'; return; }
+        panel.style.display = '';
+        count.textContent = alerts.length;
+        list.innerHTML = '';
+        alerts.forEach(function(a) {
+            var div = document.createElement('div');
+            div.className = 'mb-1 notif-enter';
+            div.innerHTML = '<strong class="text-danger">['+a.type+']</strong> ' + a.message;
+            list.appendChild(div);
+        });
+    }
+    function appendNotifications(alerts) {
+        var panel = document.getElementById('notif-panel');
+        var list = document.getElementById('notif-list');
+        var count = document.getElementById('notif-count');
+        panel.style.display = '';
+        alerts.forEach(function(a) {
+            var div = document.createElement('div');
+            div.className = 'mb-1 notif-enter';
+            div.innerHTML = '<strong class="text-danger">['+a.type+']</strong> ' + a.message;
+            list.prepend(div);
+        });
+        count.textContent = list.children.length;
+    }
+
+    // ── Charts (Chart.js 4.x) ──
+    var chartBuf = { labels:[], fullLabels:[], power:{ch1:[],ch2:[]}, current:{ch1:[],ch2:[]}, voltage:{ch1:[],ch2:[]} };
+
+    function getOpts(minY, maxY, yTitle) {
+        var yScale = { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 }, padding: 6 } };
+        if (minY !== undefined) yScale.min = minY;
+        if (maxY !== undefined) yScale.max = maxY;
+        if (yTitle) yScale.title = { display: true, text: yTitle, font: { size: 11, weight: 'bold' } };
+        
+        return {
+            responsive: true, maintainAspectRatio: true,
+            animation: { duration: 200 },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { font: { size: 11 }, boxWidth: 12, padding: 15 } },
+                tooltip: { 
+                    cornerRadius: 4, 
+                    padding: 8,
+                    callbacks: {
+                        title: function(context) {
+                            var idx = context[0].dataIndex;
+                            if (chartBuf.fullLabels && chartBuf.fullLabels[idx]) return chartBuf.fullLabels[idx];
+                            return context[0].label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { font: { size: 10 }, maxRotation: 0, maxTicksLimit: 6 },
+                    title: { display: true, text: 'Waktu', font: { size: 11, weight: 'bold' } }
+                },
+                y: yScale
+            }
+        };
+    }
+
+    function ds(label, color) {
+        return { label: label, data: [], borderColor: color, backgroundColor: color+'22', borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.3, fill: true, spanGaps: true };
+    }
+
+    var powerChart = new Chart(document.getElementById('chart-power'), {
+        type: 'line', data: { labels: [], datasets: [ds('Ch1 Daya','#36a2eb'), ds('Ch2 Daya','#ffc107')] }, options: getOpts(0, 200, 'Daya (W)')
+    });
+    var currentChart = new Chart(document.getElementById('chart-current'), {
+        type: 'line', data: { labels: [], datasets: [ds('Ch1 Arus','#36a2eb'), ds('Ch2 Arus','#ffc107')] }, options: getOpts(0, 1, 'Arus (A)')
+    });
+    var voltageChart = new Chart(document.getElementById('chart-voltage'), {
+        type: 'line', data: { labels: [], datasets: [ds('Ch1 Tegangan','#36a2eb'), ds('Ch2 Tegangan','#ffc107')] }, options: getOpts(0, 240, 'Tegangan (V)')
+    });
+
+    var errorCount = {1: 0, 2: 0};
+    var lastRelayState = {1: null, 2: null};
+
+    function updateCharts(channels, timestamp, skipEfficiency) {
+        var label = '--:--';
+        var fullLabel = '--:--';
+        if (timestamp) { 
+            var p = timestamp.split('T'); 
+            if (p[1]) {
+                label = p[1].substring(0,8);
+                var d = p[0].split('-');
+                if(d.length === 3) {
+                    fullLabel = d[2] + '/' + d[1] + '/' + d[0] + ' ' + label;
+                } else {
+                    fullLabel = p[0] + ' ' + label;
+                }
+            }
+        }
+        var c1 = channels.find(function(c){return c.channel===1;}) || {};
+        var c2 = channels.find(function(c){return c.channel===2;}) || {};
+
+        function getVal(c, key, chIndex) {
+            if (c && Object.keys(c).length > 0) {
+                var ch = c.channel;
+                if (ch && c.relay_on !== undefined) { // Live WebSocket update
+                    if (c.relay_on === true && c.sensor_ok === false) {
+                        if (lastRelayState[ch] === true) {
+                            errorCount[ch] = 4; // Sudden break while ON -> skip warmup delay
+                        } else {
+                            errorCount[ch] = (errorCount[ch] || 0) + 1; // Normal warmup
+                        }
+                        if (errorCount[ch] > 3) return 0; // Error/Offline > 15s -> drop to 0
+                        return null; // Warmup -> ignore
+                    }
+                    if (c.relay_on === true && c.sensor_ok === true) {
+                        errorCount[ch] = 0; // Reset count
+                    }
+                    lastRelayState[ch] = c.relay_on; // Remember state
+                    if (c.relay_on === false) return 0; // Explicitly OFF -> 0
+                }
+                
+                if (ch && c.relay_on === undefined) { // DB payload (valid ON data)
+                    lastRelayState[ch] = true;
+                }
+                
+                return c[key] !== undefined ? c[key] : null;
+            }
+            if (!skipEfficiency) { // Live update, missing channel (all relays OFF)
+                lastRelayState[chIndex] = false;
+                errorCount[chIndex] = 0; // Reset error count
+            }
+            return 0; // Plot 0 for missing/OFF data
+        }
+
+        var p1 = getVal(c1, 'power', 1), p2 = getVal(c2, 'power', 2);
+        var a1 = getVal(c1, 'current', 1), a2 = getVal(c2, 'current', 2);
+        var v1 = getVal(c1, 'voltage', 1), v2 = getVal(c2, 'voltage', 2);
+
+        if (p1 === null && p2 === null && skipEfficiency !== true) return; // Skip pushing if both are warming up
+
+        chartBuf.labels.push(label);
+        chartBuf.fullLabels.push(fullLabel);
+        chartBuf.power.ch1.push(p1);     chartBuf.power.ch2.push(p2);
+        chartBuf.current.ch1.push(a1);  chartBuf.current.ch2.push(a2);
+        chartBuf.voltage.ch1.push(v1);  chartBuf.voltage.ch2.push(v2);
+
+        if (chartBuf.labels.length > MAX_POINTS) {
+            chartBuf.labels.shift();
+            chartBuf.fullLabels.shift();
+            chartBuf.power.ch1.shift(); chartBuf.power.ch2.shift();
+            chartBuf.current.ch1.shift(); chartBuf.current.ch2.shift();
+            chartBuf.voltage.ch1.shift(); chartBuf.voltage.ch2.shift();
+        }
+
+        function sync(chart, d1, d2) {
+            chart.data.labels = chartBuf.labels.slice();
+            chart.data.datasets[0].data = d1.slice();
+            chart.data.datasets[1].data = d2.slice();
+            chart.update('none');
+        }
+        sync(powerChart, chartBuf.power.ch1, chartBuf.power.ch2);
+        sync(currentChart, chartBuf.current.ch1, chartBuf.current.ch2);
+        sync(voltageChart, chartBuf.voltage.ch1, chartBuf.voltage.ch2);
+
+        // Realtime update for Efficiency Chart
+        if (!skipEfficiency && typeof appendEfficiencyData === 'function') {
+            appendEfficiencyData(channels, timestamp);
+        }
+    }
+
+    // ── Efficiency Chart v2 ──
+    let effChartInstance = null;
+    let effGrouped = {};
+    let effTOn = 0, effTOff = 0, effTDim = 0;
+    let effDimStartLabel = "";
+
+    function timeToMinutes(timeStr) {
+        if (!timeStr) return 0;
+        let p = timeStr.split(':');
+        return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+    }
+    
+    function formatTime(minutes) {
+        let m = minutes % 1440;
+        if (m < 0) m += 1440;
+        let hh = String(Math.floor(m / 60) % 24).padStart(2, '0');
+        let mm = String(m % 60).padStart(2, '0');
+        return hh + ':' + mm;
+    }
+
+    function appendEfficiencyData(channels, timestamp) {
+            if (!timestamp) return;
+            let p = timestamp.split('T');
+            if (p.length < 2) return;
+            let hhmm = p[1].substring(0, 5); // "HH:MM"
+            
+            if (!effGrouped[hhmm]) {
+                effGrouped[hhmm] = { vSum: 0, iSum: 0, count: 0 };
+            }
+            
+            channels.forEach(ch => {
+                effGrouped[hhmm].vSum += (ch.voltage || 0);
+                effGrouped[hhmm].iSum += (ch.current || 0);
+                effGrouped[hhmm].count += 1;
+            });
+            
+            // Re-render chart silently
+            if (effChartInstance && effDimStartLabel) {
+                recalcAndDrawEffChart();
+            }
+    }
+
+    function fetchEfficiencyData() {
+        document.getElementById('eff-loader').style.display = 'block';
+        document.getElementById('eff-error').style.display = 'none';
+        document.getElementById('eff-chart-container').style.display = 'none';
+
+        Promise.all([
+            fetch('/api/efficiency-summary').then(r => { if(!r.ok) throw new Error('schedule fail'); return r.json(); }),
+            fetch('/api/efficiency-data-7days').then(r => { if(!r.ok) throw new Error('eff data fail'); return r.json(); }),
+            fetch('/api/sensor-data?recent=30').then(r => { if(!r.ok) throw new Error('recent fail'); return r.json(); })
+        ])
+        .then(([sched, effData7Days, recentLogs]) => {
+            document.getElementById('eff-loader').style.display = 'none';
+            document.getElementById('eff-chart-container').style.display = 'block';
+
+            effTOn = timeToMinutes(sched.on_time);
+            effTDim = timeToMinutes(sched.dim_start);
+            effTOff = timeToMinutes(sched.off_time);
+            effDimStartLabel = sched.dim_start;
+
+            if (effTDim < effTOn) effTDim += 1440;
+            if (effTOff <= effTOn) effTOff += 1440;
+
+            // 1. Assign server-calculated 7-day efficiency data
+            effGrouped = effData7Days || {};
+
+            // 1.5 Prefill Line Charts (Power, Current, Voltage)
+            let recentLogsByTime = {};
+            recentLogs.forEach(log => {
+                let ts = log.timestamp.replace(' ', 'T');
+                if (!recentLogsByTime[ts]) recentLogsByTime[ts] = [];
+                recentLogsByTime[ts].push({
+                    channel: log.channel,
+                    voltage: log.voltage,
+                    current: log.current,
+                    power: log.power || 0
+                });
+            });
+            
+            let sortedTimes = Object.keys(recentLogsByTime).sort();
+            let last30Times = sortedTimes.slice(-MAX_POINTS);
+            
+            last30Times.forEach(ts => {
+                updateCharts(recentLogsByTime[ts], ts, true);
+            });
+
+            recalcAndDrawEffChart();
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('eff-loader').style.display = 'none';
+            document.getElementById('eff-error').style.display = 'block';
+        });
+    }
+    window.fetchEfficiencyData = fetchEfficiencyData;
+
+    function recalcAndDrawEffChart() {
+            // 2. Generate chart data
+            let labels = [];
+            let effData = [];
+            let pointColors = [];
+            let pointRadii = [];
+            let customTooltips = [];
+
+            for (let t = effTOn; t <= effTOff; t++) {
+                let hhmm = formatTime(t);
+                labels.push(hhmm);
+                
+                let isDimZone = t >= effTDim;
+                
+                let isKeyPoint = (t === effTOn || t === effTDim || t === effTOff);
+                pointRadii.push(isKeyPoint ? 5 : 0);
+                pointColors.push(t === effTDim ? '#ffa426' : '#36a2eb');
+
+                if (effGrouped[hhmm]) {
+                    let vAvg = effGrouped[hhmm].vSum / effGrouped[hhmm].count;
+                    let iAvg = effGrouped[hhmm].iSum / effGrouped[hhmm].count;
+                    let pNorm = vAvg * iAvg;
+                    
+                    let eff = 0;
+                    if (isDimZone) {
+                        let pReal = pNorm - (0.5 * pNorm);
+                        if (pNorm > 0) eff = ((pNorm - pReal) / pNorm) * 100;
+                    }
+                    effData.push(eff);
+                    customTooltips.push({ v: vAvg.toFixed(1), i: iAvg.toFixed(3), zone: isDimZone ? 'Penjarangan' : 'Normal' });
+                } else {
+                    let lastEff = effData.length > 0 ? effData[effData.length - 1] : (isDimZone ? 50 : 0);
+                    effData.push(lastEff);
+                    customTooltips.push({ v: '--', i: '--', zone: isDimZone ? 'Penjarangan' : 'Normal' });
+                }
+            }
+
+            renderEffChart(labels, effData, pointColors, pointRadii, customTooltips, effDimStartLabel);
+    }
+
+    function renderEffChart(labels, data, pointColors, pointRadii, customTooltips, dimStartLabel) {
+        if (effChartInstance) effChartInstance.destroy();
+        
+        let ctx = document.getElementById('chart-efficiency-v2').getContext('2d');
+        effChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Efisiensi Energi (%)',
+                    data: data,
+                    borderColor: '#36a2eb',
+                    borderWidth: 2,
+                    stepped: true,
+                    tension: 0,
+                    pointBackgroundColor: pointColors,
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: pointRadii,
+                    pointHoverRadius: 7,
+                    fill: false
+                }]
+            },
+            options: {
+                animation: false,
+                responsive: true,
+                maintainAspectRatio: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            font: { size: 11 },
+                            boxWidth: 12,
+                            padding: 15,
+                            generateLabels: function(chart) {
+                                return [
+                                    { text: 'Normal', fillStyle: '#36a2eb22', strokeStyle: '#36a2eb', lineWidth: 2, datasetIndex: 0 },
+                                    { text: 'Penjarangan', fillStyle: '#ffa42622', strokeStyle: '#ffa426', lineWidth: 2, datasetIndex: 1 }
+                                ];
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                let tip = customTooltips[ctx.dataIndex];
+                                return [
+                                    'Efisiensi: ' + ctx.parsed.y.toFixed(1) + '%',
+                                    'Waktu: ' + tip.zone,
+                                    'Rata-rata Tegangan: ' + tip.v + ' V',
+                                    'Rata-rata Arus: ' + tip.i + ' A'
+                                ];
+                            }
+                        }
+                    },
+                    annotation: {
+                        annotations: {
+                            zoneNormal: {
+                                type: 'box',
+                                xMin: labels[0],
+                                xMax: dimStartLabel,
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                borderWidth: 0
+                            },
+                            zoneDim: {
+                                type: 'box',
+                                xMin: dimStartLabel,
+                                xMax: labels[labels.length-1],
+                                backgroundColor: 'rgba(255, 164, 38, 0.1)',
+                                borderWidth: 0
+                            },
+                            lineDim: {
+                                type: 'line',
+                                xMin: dimStartLabel,
+                                xMax: dimStartLabel,
+                                borderColor: '#ffa426',
+                                borderDash: [5, 5],
+                                borderWidth: 2
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        title: { display: true, text: 'Waktu', font: { size: 11, weight: 'bold' } },
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 0,
+                            callback: function(val, index) {
+                                let label = this.getLabelForValue(val);
+                                if (index === 0 || index === labels.length - 1 || label === dimStartLabel) {
+                                    return label;
+                                }
+                                return '';
+                            }
+                        }
+                    },
+                    y: {
+                        min: 0,
+                        max: 100,
+                        title: { display: true, text: 'Efisiensi (%)', font: { size: 11, weight: 'bold' } },
+                        ticks: {
+                            stepSize: 10,
+                            callback: function(val) { return val + '%'; }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── Init ──
+    fetchEfficiencyData();
+    // Removed setInterval since WebSocket provides real-time updates now.
+    connectWS();
+})();
+</script>
+
+<!-- Modal Rumus Efisiensi -->
+<div class="modal fade" id="effModal" tabindex="-1" role="dialog" aria-labelledby="effModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="effModalLabel">Rumus Efisiensi Energi</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Efisiensi energi pada sistem ini dihitung berdasarkan asumsi pengurangan beban lampu saat masa <b>Penjarangan</b> aktif.</p>
+        
+        <h6>1. Daya Normal Teoritis (\( P_{norm} \))</h6>
+        <p>Dihitung dari perkalian rata-rata tegangan dan arus saat itu:</p>
+        <p class="text-center">\( P_{norm} = \overline{V} \times \overline{I} \)</p>
+        
+        <h6>2. Daya Penjarangan (\( P_{real} \))</h6>
+        <p>Sistem mengasumsikan beban berkurang 50% selama masa penjarangan:</p>
+        <p class="text-center">\( P_{real} = P_{norm} - (0.5 \times P_{norm}) \)</p>
+        
+        <h6>3. Nilai Efisiensi (%)</h6>
+        <p>Persentase efisiensi adalah rasio daya yang dihemat dibandingkan dengan daya normal:</p>
+        <p class="text-center">\( \text{Efisiensi} = \left( \frac{P_{norm} - P_{real}}{P_{norm}} \right) \times 100\% \)</p>
+        
+        <p class="text-muted mt-3 mb-0"><small><i class="fas fa-info-circle"></i> <b>Catatan:</b> Berdasarkan rumus di atas, saat memasuki waktu penjarangan, grafik akan selalu menghasilkan nilai konstan 50% karena \( P_{real} \) di set tepat 50% dari \( P_{norm} \).</small></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+{% endblock %}
