@@ -765,16 +765,27 @@
 
                 if (effGrouped[hhmm]) {
                     let vAvg = effGrouped[hhmm].vSum / effGrouped[hhmm].count;
-                    let iAvg = effGrouped[hhmm].iSum / effGrouped[hhmm].count;
-                    let pNorm = vAvg * iAvg;
+                    
+                    // Sesuai permintaan: jumlahkan ch1+ch2 saat normal, biarkan seperti lama saat penjarangan
+                    let iVal = 0;
+                    if (!isDimZone) {
+                        // Normal: Dijumlahkan (total dari 2 channel)
+                        iVal = effGrouped[hhmm].iSum / (effGrouped[hhmm].count / 2);
+                    } else {
+                        // Penjarangan: Tidak dijumlahkan (tetap rata-rata seperti lama)
+                        iVal = effGrouped[hhmm].iSum / effGrouped[hhmm].count;
+                    }
+                    
+                    let pNorm = vAvg * iVal;
                     
                     let eff = 0;
                     if (isDimZone) {
+                        // Penjarangan: Efisiensi tetap 50% sesuai rumus statis sebelumnya
                         let pReal = pNorm - (0.5 * pNorm);
                         if (pNorm > 0) eff = ((pNorm - pReal) / pNorm) * 100;
                     }
                     effData.push(eff);
-                    customTooltips.push({ v: vAvg.toFixed(1), i: iAvg.toFixed(3), zone: isDimZone ? 'Penjarangan' : 'Normal' });
+                    customTooltips.push({ v: vAvg.toFixed(1), i: iVal.toFixed(3), zone: isDimZone ? 'Penjarangan' : 'Normal' });
                 } else {
                     let lastEff = effData.length > 0 ? effData[effData.length - 1] : (isDimZone ? 50 : 0);
                     effData.push(lastEff);
