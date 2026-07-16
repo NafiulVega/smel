@@ -165,6 +165,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             "group_status": status["group_status"],
             "channels": channels_data,
             "active_alerts": active_alerts,
+            "is_snapshot": True,
         }
 
 
