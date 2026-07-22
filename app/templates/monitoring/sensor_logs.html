@@ -26,6 +26,17 @@
                 <form method="GET" action="{% url 'sensor-logs' %}" class="row align-items-end">
                     <div class="col-md-2">
                         <div class="form-group mb-0">
+                            <label for="group_id">Grup</label>
+                            <select class="form-control" id="group_id" name="group_id">
+                                <option value="">Semua</option>
+                                {% for cfg in configs %}
+                                <option value="{{ cfg.id }}" {% if group_id == cfg.id|stringformat:'s' %}selected{% endif %}>{{ cfg.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group mb-0">
                             <label for="channel">Channel</label>
                             <select class="form-control" id="channel" name="channel">
                                 <option value="">Semua</option>
@@ -34,28 +45,28 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="form-group mb-0">
                             <label for="date_from">Dari Tanggal</label>
                             <input type="date" class="form-control" id="date_from" name="date_from"
                                    value="{{ date_from }}">
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="form-group mb-0">
                             <label for="date_to">Sampai Tanggal</label>
                             <input type="date" class="form-control" id="date_to" name="date_to"
                                    value="{{ date_to }}">
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <button type="submit" class="btn btn-primary mr-1">
                             <i class="fas fa-search mr-1"></i> Filter
                         </button>
                         <a href="{% url 'sensor-logs' %}" class="btn btn-secondary mr-1">
                             <i class="fas fa-redo mr-1"></i> Reset
                         </a>
-                        <a href="{% url 'sensor-logs' %}?channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}&export=csv" class="btn btn-success mr-1">
+                        <a href="{% url 'sensor-logs' %}?group_id={{ group_id }}&channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}&export=csv" class="btn btn-success mr-1">
                             <i class="fas fa-file-export mr-1"></i> Ekspor
                         </a>
                         <button type="button" class="btn btn-info" data-toggle="modal" data-target="#importModal">
@@ -74,6 +85,7 @@
                         <thead>
                             <tr>
                                 <th class="text-center" style="width:50px;">#</th>
+                                <th>Grup</th>
                                 <th>Channel</th>
                                 <th>Waktu</th>
                                 <th class="text-right">V</th>
@@ -88,6 +100,7 @@
                             {% for log in page_obj %}
                             <tr>
                                 <td class="text-center text-muted">{{ log.id }}</td>
+                                <td class="text-small">{{ log.group_config.name|default:"-" }}</td>
                                 <td>
                                     {% if log.channel == 1 %}
                                     <span class="badge badge-info">Ch1</span>
@@ -105,7 +118,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="9" class="text-center text-muted py-4">
+                                <td colspan="10" class="text-center text-muted py-4">
                                     <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
                                     Belum ada data sensor
                                 </td>
@@ -121,7 +134,7 @@
                     <ul class="pagination justify-content-center mb-0">
                         {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&group_id={{ group_id }}&channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}">
                                 <i class="fas fa-chevron-left"></i>
                             </a>
                         </li>
@@ -132,14 +145,14 @@
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                             {% elif num > page_obj.number|add:"-4" and num < page_obj.number|add:"4" %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}&channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}&group_id={{ group_id }}&channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}">{{ num }}</a>
                             </li>
                             {% endif %}
                         {% endfor %}
 
                         {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&group_id={{ group_id }}&channel={{ channel }}&date_from={{ date_from }}&date_to={{ date_to }}">
                                 <i class="fas fa-chevron-right"></i>
                             </a>
                         </li>

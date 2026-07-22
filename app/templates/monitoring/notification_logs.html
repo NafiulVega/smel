@@ -29,6 +29,17 @@
                 <form method="GET" action="{% url 'notification-logs' %}" class="row align-items-end">
                     <div class="col-md-2">
                         <div class="form-group mb-0">
+                            <label for="group_id">Grup</label>
+                            <select class="form-control" id="group_id" name="group_id">
+                                <option value="">Semua</option>
+                                {% for cfg in configs %}
+                                <option value="{{ cfg.id }}" {% if group_id == cfg.id|stringformat:'s' %}selected{% endif %}>{{ cfg.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group mb-0">
                             <label for="type">Tipe</label>
                             <select class="form-control" id="type" name="type">
                                 <option value="">Semua</option>
@@ -87,6 +98,7 @@
                         <thead>
                             <tr>
                                 <th class="text-center" style="width:50px;">#</th>
+                                <th>Grup</th>
                                 <th>Channel</th>
                                 <th>Tipe</th>
                                 <th>Pesan</th>
@@ -99,6 +111,7 @@
                             {% for notif in page_obj %}
                             <tr>
                                 <td class="text-center text-muted">{{ notif.id }}</td>
+                                <td class="text-small">{{ notif.group_config.name|default:"-" }}</td>
                                 <td>
                                     {% if notif.channel == 1 %}
                                     <span class="badge badge-info">Ch1</span>
@@ -140,7 +153,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">
+                                <td colspan="8" class="text-center text-muted py-4">
                                     <i class="fas fa-bell-slash fa-2x mb-2 d-block"></i>
                                     Belum ada notifikasi
                                 </td>
@@ -156,7 +169,7 @@
                     <ul class="pagination justify-content-center mb-0">
                         {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&group_id={{ group_id }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">
                                 <i class="fas fa-chevron-left"></i>
                             </a>
                         </li>
@@ -167,14 +180,14 @@
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                             {% elif num > page_obj.number|add:"-4" and num < page_obj.number|add:"4" %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}&group_id={{ group_id }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">{{ num }}</a>
                             </li>
                             {% endif %}
                         {% endfor %}
 
                         {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&group_id={{ group_id }}&type={{ notif_type }}&status={{ status_filter }}&channel={{ channel }}">
                                 <i class="fas fa-chevron-right"></i>
                             </a>
                         </li>

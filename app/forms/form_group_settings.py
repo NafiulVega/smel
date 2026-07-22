@@ -1,5 +1,5 @@
 from django import forms
-from app.models import Group
+from app.models import GroupConfig
 
 
 def _in_range(t, start, end):
@@ -58,26 +58,18 @@ class GroupSettingsForm(forms.ModelForm):
     )
 
     class Meta:
-        model  = Group
+        # Form ini saat ini tidak digunakan secara langsung —
+        # pengaturan ditangani manual di view_settings.py.
+        # Dipertahankan sebagai referensi / potensi penggunaan di masa depan.
+        model  = GroupConfig
         fields = [
             'is_active',
-            'jam_nyala', 'jam_mati',
-            'penjarangan_aktif',
-            'jam_mulai_penjarangan', 'jam_selesai_penjarangan',
-            'arus_min', 'daya_min',
+            'on_time', 'off_time',
+            'dimming_enabled',
+            'dimming_start', 'dimming_end',
+            'ch1_current_min', 'ch2_current_min',
+            'data_send_interval',
         ]
-        widgets = {
-            'is_active':         forms.CheckboxInput(attrs={'class': 'custom-switch-input'}),
-            'penjarangan_aktif': forms.CheckboxInput(attrs={'class': 'custom-switch-input'}),
-            'arus_min': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}),
-            'daya_min': forms.NumberInput(attrs={'class': 'form-control', 'step': '1',   'min': '0'}),
-        }
-        labels = {
-            'is_active':         'Group Aktif',
-            'penjarangan_aktif': 'Aktifkan Penjarangan',
-            'arus_min':          'Arus Minimum (A)',
-            'daya_min':          'Daya Minimum (W)',
-        }
 
     def clean(self):
         cleaned = super().clean()

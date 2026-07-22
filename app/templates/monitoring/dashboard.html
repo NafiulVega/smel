@@ -17,6 +17,20 @@
             </div>
         </div>
 
+        <!-- ═══ TAB NAVIGASI GRUP (pola sama seperti Pengaturan) ═══ -->
+        {% if configs|length > 1 %}
+        <ul class="nav nav-tabs mb-3" id="dashboardTabs" role="tablist">
+            {% for cfg in configs %}
+            <li class="nav-item">
+                <a class="nav-link {% if cfg.id == active_config.id %}active{% endif %}"
+                   href="?group_id={{ cfg.id }}">
+                    <i class="fas fa-map-marker-alt mr-1"></i> {{ cfg.name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
         <!-- ═══ NOTIFICATION BANNER ═══ -->
         <div id="notif-panel" class="mb-4" style="display:none;">
             <div class="alert alert-warning alert-has-icon alert-dismissible">
@@ -38,7 +52,7 @@
                     </div>
                     <div class="card-wrap">
                         <div class="card-header">
-                            <h4>{{ config.name|default:"Jalan Nasional" }}</h4>
+                            <h4>{{ active_config.name|default:"Jalan Nasional" }}</h4>
                         </div>
                         <div class="card-body" id="group-status-text">
                             {{ group_status|default:"MATI" }}
@@ -233,7 +247,17 @@
                 <div class="card">
                     <div class="card-header">
                         <h4>Efisiensi Energi (%)</h4>
-                        <div class="card-header-action">
+                        <div class="card-header-action d-flex align-items-center">
+                            <!-- Navigasi Periode -->
+                            <button type="button" class="btn btn-light btn-sm mr-1" id="eff-prev"
+                                title="Periode Sebelumnya" onclick="shiftPeriod(1)">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <span class="mx-1 small text-muted" id="eff-period-label" style="white-space:nowrap;">Memuat...</span>
+                            <button type="button" class="btn btn-light btn-sm ml-1 mr-2" id="eff-next"
+                                title="Periode Berikutnya" onclick="shiftPeriod(-1)" disabled>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
                             <button type="button" class="btn btn-info btn-sm" data-toggle="modal" data-target="#effModal" title="Lihat Rumus Perhitungan">
                                 <i class="fas fa-info-circle"></i> Rumus
                             </button>
@@ -330,7 +354,9 @@
     // ── WebSocket ──
     function connectWS() {
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        ws = new WebSocket(proto + '//' + location.host + '/ws/dashboard/');
+        // Hubungkan ke channel grup aktif agar hanya menerima update grup ini
+        const groupId = '{{ active_config.id }}';
+        ws = new WebSocket(proto + '//' + location.host + '/ws/dashboard/' + groupId + '/');
 
         ws.onopen = function() {
             setWsStatus(true);
@@ -655,6 +681,9 @@
     let effGrouped = {};
     let effTOn = 0, effTOff = 0, effTDim = 0;
     let effDimStartLabel = "";
+    let effDimEnabled = false;
+    let currentPeriodOffset = 1; // 1 = periode terakhir yang sudah selesai
+    let effSchedule = null;     // Cache hasil /api/efficiency-summary
 
     function timeToMinutes(timeStr) {
         if (!timeStr) return 0;
@@ -670,135 +699,184 @@
         return hh + ':' + mm;
     }
 
-    function appendEfficiencyData(channels, timestamp) {
-            if (!timestamp) return;
-            let p = timestamp.split('T');
-            if (p.length < 2) return;
-            let hhmm = p[1].substring(0, 5); // "HH:MM"
-            
-            if (!effGrouped[hhmm]) {
-                effGrouped[hhmm] = { vSum: 0, iSum: 0, count: 0 };
-            }
-            
-            channels.forEach(ch => {
-                effGrouped[hhmm].vSum += (ch.voltage || 0);
-                effGrouped[hhmm].iSum += (ch.current || 0);
-                effGrouped[hhmm].count += 1;
-            });
-            
-            // Re-render chart silently
-            if (effChartInstance && effDimStartLabel) {
-                recalcAndDrawEffChart();
-            }
+    function formatPeriodLabel(isoStart, isoEnd) {
+        // Format: "19 Jul – 20 Jul 2026"
+        const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+        let dStart = new Date(isoStart);
+        let dEnd   = new Date(isoEnd);
+        let sDay   = dStart.getDate();
+        let sMon   = monthNames[dStart.getMonth()];
+        let eDay   = dEnd.getDate();
+        let eMon   = monthNames[dEnd.getMonth()];
+        let eYear  = dEnd.getFullYear();
+        if (sMon === eMon) {
+            return `${sDay} – ${eDay} ${eMon} ${eYear}`;
+        }
+        return `${sDay} ${sMon} – ${eDay} ${eMon} ${eYear}`;
     }
 
+    function showEffState(state) {
+        // state: 'loading' | 'error' | 'chart'
+        document.getElementById('eff-loader').style.display          = state === 'loading' ? 'block' : 'none';
+        document.getElementById('eff-error').style.display           = state === 'error'   ? 'block' : 'none';
+        document.getElementById('eff-chart-container').style.display = state === 'chart'   ? 'block' : 'none';
+    }
+
+    // Navigasi periode: delta=+1 → lebih lama, delta=-1 → lebih baru
+    window.shiftPeriod = function(delta) {
+        let newOffset = currentPeriodOffset + delta;
+        if (newOffset < 1) return; // Tidak boleh kurang dari 1
+        currentPeriodOffset = newOffset;
+        fetchEfficiencyData();
+    };
+
     function fetchEfficiencyData() {
-        document.getElementById('eff-loader').style.display = 'block';
-        document.getElementById('eff-error').style.display = 'none';
-        document.getElementById('eff-chart-container').style.display = 'none';
+        showEffState('loading');
+        document.getElementById('eff-period-label').textContent = 'Memuat...';
 
         Promise.all([
-            fetch('/api/efficiency-summary').then(r => { if(!r.ok) throw new Error('schedule fail'); return r.json(); }),
-            fetch('/api/efficiency-data-7days').then(r => { if(!r.ok) throw new Error('eff data fail'); return r.json(); }),
-            fetch('/api/sensor-data?recent=30').then(r => { if(!r.ok) throw new Error('recent fail'); return r.json(); })
+            // Hanya fetch jadwal jika belum ada (di-cache)
+            effSchedule
+                ? Promise.resolve(effSchedule)
+                : fetch('/api/efficiency-summary?group_id={{ active_config.id }}').then(r => { if(!r.ok) throw new Error('schedule fail'); return r.json(); }),
+            fetch('/api/efficiency-data?group_id={{ active_config.id }}&period_offset=' + currentPeriodOffset)
+                .then(r => { if(!r.ok) throw new Error('eff data fail'); return r.json(); }),
+            // Prefill charts hanya saat pertama kali (offset=1 & belum ada data recent)
+            !effSchedule
+                ? fetch('/api/sensor-data?recent=30&group_id={{ active_config.id }}').then(r => { if(!r.ok) throw new Error('recent fail'); return r.json(); })
+                : Promise.resolve(null)
         ])
-        .then(([sched, effData7Days, recentLogs]) => {
-            document.getElementById('eff-loader').style.display = 'none';
-            document.getElementById('eff-chart-container').style.display = 'block';
+        .then(([sched, effResp, recentLogs]) => {
+            // Cache jadwal
+            effSchedule = sched;
 
-            effTOn = timeToMinutes(sched.on_time);
+            effTOn  = timeToMinutes(sched.on_time);
             effTDim = timeToMinutes(sched.dim_start);
             effTOff = timeToMinutes(sched.off_time);
+            effDimEnabled   = sched.dimming_enabled;
             effDimStartLabel = sched.dim_start;
 
-            if (effTDim < effTOn) effTDim += 1440;
+            if (effTDim < effTOn)  effTDim += 1440;
             if (effTOff <= effTOn) effTOff += 1440;
 
-            // 1. Assign server-calculated 7-day efficiency data
-            effGrouped = effData7Days || {};
+            // Assign data per-channel dari periode yang dipilih
+            effGrouped = effResp.data || {};
 
-            // 1.5 Prefill Line Charts (Power, Current, Voltage)
-            let recentLogsByTime = {};
-            recentLogs.forEach(log => {
-                let ts = log.timestamp.replace(' ', 'T');
-                if (!recentLogsByTime[ts]) recentLogsByTime[ts] = [];
-                recentLogsByTime[ts].push({
-                    channel: log.channel,
-                    voltage: log.voltage,
-                    current: log.current,
-                    power: log.power || 0
+            // Update label periode
+            let periodLabel = formatPeriodLabel(effResp.period_start, effResp.period_end);
+            document.getElementById('eff-period-label').textContent = periodLabel;
+
+            // Update state tombol navigasi
+            document.getElementById('eff-next').disabled = (currentPeriodOffset <= 1);
+            document.getElementById('eff-prev').disabled = !effResp.has_older;
+
+            // Prefill line charts (Power, Current, Voltage) — hanya saat pertama kali
+            if (recentLogs) {
+                let recentLogsByTime = {};
+                recentLogs.forEach(log => {
+                    let ts = log.timestamp.replace(' ', 'T');
+                    if (!recentLogsByTime[ts]) recentLogsByTime[ts] = [];
+                    recentLogsByTime[ts].push({
+                        channel: log.channel,
+                        voltage: log.voltage,
+                        current: log.current,
+                        power: log.power || 0
+                    });
                 });
-            });
-            
-            let sortedTimes = Object.keys(recentLogsByTime).sort();
-            let last30Times = sortedTimes.slice(-MAX_POINTS);
-            
-            last30Times.forEach(ts => {
-                updateCharts(recentLogsByTime[ts], ts, true);
-            });
+                let sortedTimes = Object.keys(recentLogsByTime).sort();
+                let last30Times = sortedTimes.slice(-MAX_POINTS);
+                last30Times.forEach(ts => {
+                    updateCharts(recentLogsByTime[ts], ts, true);
+                });
+            }
 
+            showEffState('chart');
             recalcAndDrawEffChart();
         })
         .catch(err => {
             console.error(err);
-            document.getElementById('eff-loader').style.display = 'none';
-            document.getElementById('eff-error').style.display = 'block';
+            showEffState('error');
+            document.getElementById('eff-period-label').textContent = 'Error';
         });
     }
     window.fetchEfficiencyData = fetchEfficiencyData;
 
     function recalcAndDrawEffChart() {
-            // 2. Generate chart data
-            let labels = [];
-            let effData = [];
-            let pointColors = [];
-            let pointRadii = [];
-            let customTooltips = [];
+        let data = effGrouped;
+        let labels = [];
+        let effData = [];
+        let pointColors = [];
+        let pointRadii = [];
+        let customTooltips = [];
 
-            for (let t = effTOn; t <= effTOff; t++) {
-                let hhmm = formatTime(t);
-                labels.push(hhmm);
-                
-                let isDimZone = t >= effTDim;
-                
-                let isKeyPoint = (t === effTOn || t === effTDim || t === effTOff);
-                pointRadii.push(isKeyPoint ? 5 : 0);
-                pointColors.push(t === effTDim ? '#ffa426' : '#36a2eb');
+        // ── Fase 1: Hitung P_norm (baseline dari zona Normal) ──
+        // P_norm = rata-rata (V_ch1 × I_ch1 + V_ch2 × I_ch2) per menit di zona Normal
+        let normalPowers = [];
+        for (let t = effTOn; t < effTDim; t++) {
+            let hhmm = formatTime(t);
+            let d = data[hhmm];
+            if (d && d.ch1_count > 0 && d.ch2_count > 0) {
+                let v1 = d.ch1_vSum / d.ch1_count;
+                let i1 = d.ch1_iSum / d.ch1_count;
+                let v2 = d.ch2_vSum / d.ch2_count;
+                let i2 = d.ch2_iSum / d.ch2_count;
+                normalPowers.push((v1 * i1) + (v2 * i2));
+            }
+        }
+        let pNormBaseline = normalPowers.length > 0
+            ? normalPowers.reduce((a, b) => a + b, 0) / normalPowers.length
+            : 0;
 
-                if (effGrouped[hhmm]) {
-                    let vAvg = effGrouped[hhmm].vSum / effGrouped[hhmm].count;
-                    
-                    // Sesuai permintaan: jumlahkan ch1+ch2 saat normal, biarkan seperti lama saat penjarangan
-                    let iVal = 0;
-                    if (!isDimZone) {
-                        // Normal: Dijumlahkan (total dari 2 channel)
-                        iVal = effGrouped[hhmm].iSum / (effGrouped[hhmm].count / 2);
-                    } else {
-                        // Penjarangan: Tidak dijumlahkan (tetap rata-rata seperti lama)
-                        iVal = effGrouped[hhmm].iSum / effGrouped[hhmm].count;
-                    }
-                    
-                    let pNorm = vAvg * iVal;
-                    
-                    let eff = 0;
-                    if (isDimZone) {
-                        // Penjarangan: Efisiensi tetap 50% sesuai rumus statis sebelumnya
-                        let pReal = pNorm - (0.5 * pNorm);
-                        if (pNorm > 0) eff = ((pNorm - pReal) / pNorm) * 100;
-                    }
+        // ── Fase 2: Hitung efisiensi per menit ──
+        for (let t = effTOn; t <= effTOff; t++) {
+            let hhmm = formatTime(t);
+            labels.push(hhmm);
+
+            let isDimZone = effDimEnabled && (t >= effTDim);
+            let isKeyPoint = (t === effTOn || t === effTDim || t === effTOff);
+            pointRadii.push(isKeyPoint ? 5 : 0);
+            pointColors.push(isDimZone ? '#ffa426' : '#36a2eb');
+
+            let d = data[hhmm];
+
+            if (!isDimZone) {
+                // Zona Normal: efisiensi = 0% (semua lampu nyala, belum ada penghematan)
+                effData.push(0);
+                let vAvg = (d && d.ch1_count > 0) ? (d.ch1_vSum / d.ch1_count).toFixed(1) : '--';
+                let iTotal = (d && d.ch1_count > 0)
+                    ? ((d.ch1_iSum / d.ch1_count) + (d.ch2_count > 0 ? d.ch2_iSum / d.ch2_count : 0)).toFixed(3)
+                    : '--';
+                customTooltips.push({ v: vAvg, i: iTotal, zone: 'Normal', pNorm: pNormBaseline.toFixed(1), pReal: '--' });
+            } else {
+                // Zona Penjarangan: hitung dari Ch1 saja (Ch2 tidak ada data di DB)
+                if (d && d.ch1_count > 0) {
+                    let v1   = d.ch1_vSum / d.ch1_count;
+                    let i1   = d.ch1_iSum / d.ch1_count;
+                    let pReal = v1 * i1; // Hanya Ch1 (ch2_count pasti 0 saat penjarangan)
+
+                    let eff = pNormBaseline > 0
+                        ? ((pNormBaseline - pReal) / pNormBaseline) * 100
+                        : 0;
+                    eff = Math.max(0, Math.min(100, eff));
                     effData.push(eff);
-                    customTooltips.push({ v: vAvg.toFixed(1), i: iVal.toFixed(3), zone: isDimZone ? 'Penjarangan' : 'Normal' });
+                    customTooltips.push({
+                        v: v1.toFixed(1), i: i1.toFixed(3),
+                        zone: 'Penjarangan',
+                        pNorm: pNormBaseline.toFixed(1), pReal: pReal.toFixed(1)
+                    });
                 } else {
-                    let lastEff = effData.length > 0 ? effData[effData.length - 1] : (isDimZone ? 50 : 0);
+                    // Tidak ada data menit ini, gunakan nilai sebelumnya
+                    let lastEff = effData.length > 0 ? effData[effData.length - 1] : 0;
                     effData.push(lastEff);
-                    customTooltips.push({ v: '--', i: '--', zone: isDimZone ? 'Penjarangan' : 'Normal' });
+                    customTooltips.push({ v: '--', i: '--', zone: 'Penjarangan', pNorm: pNormBaseline.toFixed(1), pReal: '--' });
                 }
             }
+        }
 
-            renderEffChart(labels, effData, pointColors, pointRadii, customTooltips, effDimStartLabel);
+        renderEffChart(labels, effData, pointColors, pointRadii, customTooltips, effDimStartLabel, effDimEnabled);
     }
 
-    function renderEffChart(labels, data, pointColors, pointRadii, customTooltips, dimStartLabel) {
+    function renderEffChart(labels, data, pointColors, pointRadii, customTooltips, dimStartLabel, dimEnabled) {
         if (effChartInstance) effChartInstance.destroy();
         
         let ctx = document.getElementById('chart-efficiency-v2').getContext('2d');
@@ -837,10 +915,13 @@
                             boxWidth: 12,
                             padding: 15,
                             generateLabels: function(chart) {
-                                return [
-                                    { text: 'Normal', fillStyle: '#36a2eb22', strokeStyle: '#36a2eb', lineWidth: 2, datasetIndex: 0 },
-                                    { text: 'Penjarangan', fillStyle: '#ffa42622', strokeStyle: '#ffa426', lineWidth: 2, datasetIndex: 1 }
+                                let items = [
+                                    { text: 'Normal (0%)', fillStyle: '#36a2eb22', strokeStyle: '#36a2eb', lineWidth: 2, datasetIndex: 0 },
                                 ];
+                                if (dimEnabled) {
+                                    items.push({ text: 'Penjarangan', fillStyle: '#ffa42622', strokeStyle: '#ffa426', lineWidth: 2, datasetIndex: 1 });
+                                }
+                                return items;
                             }
                         }
                     },
@@ -848,16 +929,21 @@
                         callbacks: {
                             label: function(ctx) {
                                 let tip = customTooltips[ctx.dataIndex];
-                                return [
+                                let lines = [
                                     'Efisiensi: ' + ctx.parsed.y.toFixed(1) + '%',
                                     'Waktu: ' + tip.zone,
                                     'Rata-rata Tegangan: ' + tip.v + ' V',
-                                    'Rata-rata Arus: ' + tip.i + ' A'
+                                    'Rata-rata Arus: ' + tip.i + ' A',
                                 ];
+                                if (tip.zone === 'Penjarangan') {
+                                    lines.push('Pₙₒʳₘ: ' + tip.pNorm + ' W');
+                                    lines.push('Pᴿᵉᵃˡ: ' + (tip.pReal !== '--' ? tip.pReal + ' W' : '--'));
+                                }
+                                return lines;
                             }
                         }
                     },
-                    annotation: {
+                    annotation: dimEnabled ? {
                         annotations: {
                             zoneNormal: {
                                 type: 'box',
@@ -882,7 +968,7 @@
                                 borderWidth: 2
                             }
                         }
-                    }
+                    } : {},
                 },
                 scales: {
                     x: {
@@ -932,21 +1018,28 @@
         </button>
       </div>
       <div class="modal-body">
-        <p>Efisiensi energi pada sistem ini dihitung berdasarkan asumsi pengurangan beban lampu saat masa <b>Penjarangan</b> aktif.</p>
-        
-        <h6>1. Daya Normal Teoritis (\( P_{norm} \))</h6>
-        <p>Dihitung dari perkalian rata-rata tegangan dan arus saat itu:</p>
-        <p class="text-center">\( P_{norm} = \overline{V} \times \overline{I} \)</p>
-        
-        <h6>2. Daya Penjarangan (\( P_{real} \))</h6>
-        <p>Sistem mengasumsikan beban berkurang 50% selama masa penjarangan:</p>
-        <p class="text-center">\( P_{real} = P_{norm} - (0.5 \times P_{norm}) \)</p>
-        
+        <p>Efisiensi energi dihitung secara <b>dinamis</b> berdasarkan data sensor nyata dari <b>1 periode operasional</b> yang sudah selesai. Data diambil dari rentang waktu <b>jam nyala</b> hingga <b>jam mati</b> sesuai pengaturan grup.</p>
+
+        <h6>1. Daya Normal Baseline (\( P_{norm} \))</h6>
+        <p>Dihitung dari <b>rata-rata daya total Ch1 + Ch2</b> selama zona <b>Normal</b> (sebelum penjarangan):</p>
+        <p class="text-center">\( P_{norm} = \overline{(V_{ch1} \times I_{ch1}) + (V_{ch2} \times I_{ch2})} \)</p>
+        <p class="text-muted"><small>Ini adalah baseline "seandainya semua lampu tetap menyala sepanjang malam".</small></p>
+
+        <h6>2. Daya Aktual saat Penjarangan (\( P_{real} \))</h6>
+        <p>Saat penjarangan, <b>relay Ch2 dimatikan oleh server</b>. ESP32 tidak mengirim data Ch2, sehingga di database hanya ada data Ch1. \( P_{real} \) dihitung dari Ch1 saja:</p>
+        <p class="text-center">\( P_{real} = V_{ch1} \times I_{ch1} \)</p>
+
         <h6>3. Nilai Efisiensi (%)</h6>
-        <p>Persentase efisiensi adalah rasio daya yang dihemat dibandingkan dengan daya normal:</p>
+        <p>Persentase daya yang berhasil dihemat dibandingkan baseline normal:</p>
         <p class="text-center">\( \text{Efisiensi} = \left( \frac{P_{norm} - P_{real}}{P_{norm}} \right) \times 100\% \)</p>
-        
-        <p class="text-muted mt-3 mb-0"><small><i class="fas fa-info-circle"></i> <b>Catatan:</b> Berdasarkan rumus di atas, saat memasuki waktu penjarangan, grafik akan selalu menghasilkan nilai konstan 50% karena \( P_{real} \) di set tepat 50% dari \( P_{norm} \).</small></p>
+
+        <h6>4. Zona di Grafik</h6>
+        <ul>
+          <li><span style="color:#36a2eb;">&#9632;</span> <b>Normal</b>: Efisiensi = 0% (semua lampu nyala, belum ada penghematan)</li>
+          <li><span style="color:#ffa426;">&#9632;</span> <b>Penjarangan</b>: Efisiensi bervariasi (~40-60%) berdasarkan kondisi sensor nyata</li>
+        </ul>
+
+        <p class="text-muted mt-3 mb-0"><small><i class="fas fa-info-circle"></i> <b>Catatan:</b> Gunakan tombol <i class="fas fa-chevron-left"></i> / <i class="fas fa-chevron-right"></i> di header grafik untuk melihat periode operasional sebelumnya.</small></p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>

@@ -36,8 +36,8 @@ const char *WIFI_SSID = "NAMA_WIFI_ANDA";         // Ganti dengan SSID WiFi
 const char *WIFI_PASSWORD = "PASSWORD_WIFI_ANDA"; // Ganti dengan password WiFi
 const char *SERVER_IP = "192.168.1.100"; // Ganti dengan IP server Django
 const int SERVER_PORT = 8000;            // Port server Django
-const int HTTP_TIMEOUT =
-    3500; // ms — timeout HTTP (server melakukan DB + WebSocket)
+const int GROUP_ID    = 1;               // ID grup di server, sesuaikan per perangkat
+const int HTTP_TIMEOUT = 3500; // ms — timeout HTTP (server melakukan DB + WebSocket)
 const int MAX_HTTP_RETRIES = 2; // Jumlah retry jika HTTP gagal
 
 // Interval siklus dinamis: di-update dari API web dashboard
@@ -138,7 +138,7 @@ bool fetchRelayStatus() {
 
   HTTPClient http;
   String url =
-      "http://" + String(SERVER_IP) + ":" + SERVER_PORT + "/api/relay-status";
+      "http://" + String(SERVER_IP) + ":" + SERVER_PORT + "/api/relay-status?group_id=" + String(GROUP_ID);
   http.setReuse(false); // Cegah koneksi TCP menggantung
 
   int code = -1;
@@ -280,6 +280,7 @@ bool sendSensorData(SensorReading readings[]) {
 
   StaticJsonDocument<1024> doc;
   doc["timestamp"] = getTimestamp();
+  doc["group_id"]   = GROUP_ID;
   JsonArray arr = doc.createNestedArray("readings");
 
   for (int i = 0; i < NUM_CHANNELS; i++) {

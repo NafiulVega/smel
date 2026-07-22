@@ -6,6 +6,7 @@ class NotificationLog(models.Model):
     Log notifikasi sistem monitoring.
     Mencatat peringatan saat arus/daya di bawah ambang batas
     atau sensor gagal merespons.
+    Berelasi dengan GroupConfig untuk tracking notifikasi per grup.
     """
 
     CHANNEL_CHOICES = [
@@ -24,6 +25,15 @@ class NotificationLog(models.Model):
         ("dismissed", "Di-dismiss"),
     ]
 
+    group_config = models.ForeignKey(
+        'GroupConfig',
+        on_delete=models.CASCADE,
+        related_name='notification_logs',
+        null=True,
+        blank=True,
+        verbose_name="Grup",
+        help_text="Grup konfigurasi lampu jalan",
+    )
     channel = models.IntegerField(
         choices=CHANNEL_CHOICES,
         verbose_name="Channel",
@@ -71,8 +81,9 @@ class NotificationLog(models.Model):
         verbose_name_plural = "Log Notifikasi"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["channel", "type", "status"], name="idx_notif_ch_type_status"),
+            models.Index(fields=["group_config", "channel", "type", "status"], name="idx_notif_grp_ch_type_st"),
         ]
 
     def __str__(self):
-        return f"[{self.type}] Ch{self.channel} - {self.get_status_display()}"
+        group_name = self.group_config.name if self.group_config else "N/A"
+        return f"[{group_name}] [{self.type}] Ch{self.channel} - {self.get_status_display()}"

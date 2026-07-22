@@ -5,6 +5,7 @@ class SensorLog(models.Model):
     """
     Log pembacaan sensor PZEM-004T per channel.
     Data hanya disimpan saat relay ON dan sensor berhasil dibaca.
+    Berelasi dengan GroupConfig untuk tracking data per grup.
     """
 
     CHANNEL_CHOICES = [
@@ -12,6 +13,15 @@ class SensorLog(models.Model):
         (2, "Channel 2 (Pin 12)"),
     ]
 
+    group_config = models.ForeignKey(
+        'GroupConfig',
+        on_delete=models.CASCADE,
+        related_name='sensor_logs',
+        null=True,
+        blank=True,
+        verbose_name="Grup",
+        help_text="Grup konfigurasi lampu jalan",
+    )
     channel = models.IntegerField(
         choices=CHANNEL_CHOICES,
         verbose_name="Channel",
@@ -53,8 +63,9 @@ class SensorLog(models.Model):
         verbose_name_plural = "Log Sensor"
         ordering = ["-timestamp"]
         indexes = [
-            models.Index(fields=["channel", "timestamp"], name="idx_sensor_ch_ts"),
+            models.Index(fields=["group_config", "channel", "timestamp"], name="idx_sensor_grp_ch_ts"),
         ]
 
     def __str__(self):
-        return f"Ch{self.channel} | {self.timestamp:%d/%m/%Y %H:%M:%S}"
+        group_name = self.group_config.name if self.group_config else "N/A"
+        return f"[{group_name}] Ch{self.channel} | {self.timestamp:%d/%m/%Y %H:%M:%S}"

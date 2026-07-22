@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods, require_POST
 
-from app.models import SensorLog, NotificationLog
+from app.models import SensorLog, NotificationLog, GroupConfig
 
 
 # ============================================================
@@ -25,10 +25,16 @@ from app.models import SensorLog, NotificationLog
 @require_http_methods(["GET"])
 def sensor_logs_view(request):
     """
-    Halaman log sensor dengan filter channel, tanggal, dan ekspor CSV.
+    Halaman log sensor dengan filter channel, tanggal, grup, dan ekspor CSV.
     Pagination 50 baris per halaman.
     """
-    qs = SensorLog.objects.all()
+    qs = SensorLog.objects.select_related('group_config').all()
+
+    # ── Filter grup ──
+    configs = GroupConfig.objects.all().order_by('id')
+    group_id = request.GET.get("group_id", "")
+    if group_id:
+        qs = qs.filter(group_config_id=group_id)
 
     # ── Filter channel ──
     channel = request.GET.get("channel", "")
@@ -68,6 +74,8 @@ def sensor_logs_view(request):
 
     context = {
         "page_obj": page_obj,
+        "configs": configs,
+        "group_id": group_id,
         "channel": channel,
         "date_from": date_from,
         "date_to": date_to,
@@ -77,7 +85,7 @@ def sensor_logs_view(request):
 
 
 def _export_sensor_csv(queryset):
-    """Ekspor queryset SensorLog ke file CSV."""
+    """Ekspor queryset SensorLog ke file CSV (termasuk kolom Grup)."""
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = (
         f'attachment; filename="sensor_log_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.csv"'
@@ -85,13 +93,14 @@ def _export_sensor_csv(queryset):
 
     writer = csv.writer(response)
     writer.writerow([
-        "ID", "Channel", "Timestamp", "Date", "Time", "Voltage (V)", "Current (A)",
+        "ID", "Grup", "Channel", "Timestamp", "Date", "Time", "Voltage (V)", "Current (A)",
         "Power (W)", "Energy (kWh)", "Frequency (Hz)", "Power Factor"
     ])
 
-    for log in queryset.iterator():
+    for log in queryset.select_related('group_config').iterator():
         writer.writerow([
             log.id,
+            log.group_config.name if log.group_config else "-",
             log.channel,
             timezone.localtime(log.timestamp).strftime("%Y-%m-%d %H:%M:%S"),
             timezone.localtime(log.timestamp).strftime("%Y-%m-%d"),
@@ -113,6 +122,7 @@ def import_sensor_csv(request):
     Import data sensor dari file CSV menggunakan pandas.
 
     Mendukung kolom 'Timestamp' atau gabungan 'Date' dan 'Time'.
+    Group dapat dipilih via POST field 'group_id' (default: grup pertama).
     """
     import pandas as pd
 
@@ -124,6 +134,17 @@ def import_sensor_csv(request):
 
     if not csv_file.name.endswith(".csv"):
         messages.error(request, "File harus berformat .csv")
+        return redirect("sensor-logs")
+
+    # Tentukan grup dari form POST (default: grup pertama)
+    import_group_id = request.POST.get("import_group_id")
+    if import_group_id:
+        import_config = GroupConfig.objects.filter(id=import_group_id).first()
+    else:
+        import_config = GroupConfig.objects.first()
+
+    if not import_config:
+        messages.error(request, "Belum ada konfigurasi grup. Buat grup terlebih dahulu.")
         return redirect("sensor-logs")
 
     try:
@@ -177,6 +198,7 @@ def import_sensor_csv(request):
                     continue
 
                 SensorLog.objects.create(
+                    group_config=import_config,
                     channel=channel,
                     timestamp=row['Timestamp'].to_pydatetime(),
                     voltage=float(row.get('Voltage (V)', 0)),
@@ -193,7 +215,7 @@ def import_sensor_csv(request):
                 continue
 
         if created > 0:
-            messages.success(request, f"{created} data sensor berhasil diimport.")
+            messages.success(request, f"{created} data sensor berhasil diimport ke grup '{import_config.name}'.")
         if errors:
             error_summary = "; ".join(errors[:5])
             if len(errors) > 5:
@@ -215,10 +237,16 @@ def import_sensor_csv(request):
 @require_http_methods(["GET"])
 def notification_logs_view(request):
     """
-    Halaman log notifikasi dengan filter tipe, status, dan tombol dismiss.
+    Halaman log notifikasi dengan filter tipe, status, grup, dan tombol dismiss.
     Pagination 50 baris per halaman.
     """
-    qs = NotificationLog.objects.all()
+    qs = NotificationLog.objects.select_related('group_config').all()
+
+    # ── Filter grup ──
+    configs = GroupConfig.objects.all().order_by('id')
+    group_id = request.GET.get("group_id", "")
+    if group_id:
+        qs = qs.filter(group_config_id=group_id)
 
     # ── Filter tipe ──
     notif_type = request.GET.get("type", "")
@@ -242,6 +270,8 @@ def notification_logs_view(request):
 
     context = {
         "page_obj": page_obj,
+        "configs": configs,
+        "group_id": group_id,
         "notif_type": notif_type,
         "status_filter": status,
         "channel": channel,

@@ -1,10 +1,10 @@
 """
 WebSocket consumer untuk dashboard monitoring real-time.
 
-Endpoint: ws://server:8000/ws/dashboard/
+Endpoint: ws://server:8000/ws/dashboard/<group_id>/
 
 Event types yang di-handle:
-  - dashboard_update    → Data sensor baru dari ESP32 (broadcast)
+  - dashboard_update    → Data sensor baru dari ESP32 (broadcast per grup)
   - notification_update → Notifikasi baru atau perubahan status
   - config_update       → Pengaturan grup diubah dari halaman settings
 """
@@ -22,23 +22,33 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     """
     WebSocket consumer untuk dashboard monitoring real-time.
 
+    Setiap grup memiliki channel broadcast tersendiri: "dashboard_{group_id}".
     Saat klien terhubung, langsung mengirim snapshot data terkini:
     - Status grup (NYALA / MATI / PENJARANGAN)
-    - Data sensor terakhir per channel
-    - Notifikasi aktif
-    - Ringkasan efisiensi energi hari ini
+    - Data sensor terakhir per channel (difilter per grup)
+    - Notifikasi aktif (difilter per grup)
 
     Setelah itu, data baru di-push setiap kali ESP32 mengirim POST /api/sensor-data.
     """
 
     async def connect(self):
-        await self.channel_layer.group_add("dashboard", self.channel_name)
+        # Ambil group_id dari URL path (misal: /ws/dashboard/1/)
+        self.group_id = self.scope["url_route"]["kwargs"].get("group_id")
+
+        # Tentukan nama channel layer group: "dashboard_1", "dashboard_2", dst.
+        # Fallback ke "dashboard" jika tidak ada group_id (kompatibilitas mundur)
+        if self.group_id:
+            self.ws_group = f"dashboard_{self.group_id}"
+        else:
+            self.ws_group = "dashboard"
+
+        await self.channel_layer.group_add(self.ws_group, self.channel_name)
         await self.accept()
         # Kirim data terkini saat koneksi pertama
         await self.send_current_state()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard("dashboard", self.channel_name)
+        await self.channel_layer.group_discard(self.ws_group, self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
         """Menerima pesan dari klien (jika diperlukan di masa depan)."""
@@ -86,11 +96,10 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _get_current_state(self):
         """
-        Kumpulkan snapshot status dari database:
+        Kumpulkan snapshot status dari database untuk grup tertentu:
         - GroupConfig → group_status, dimming_active
-        - SensorLog terakhir per channel → data sensor
-        - NotificationLog aktif → active_alerts
-        - Efisiensi energi hari ini
+        - SensorLog terakhir per channel (difilter per grup) → data sensor
+        - NotificationLog aktif (difilter per grup) → active_alerts
         """
         from app.models import GroupConfig, SensorLog, NotificationLog
         from app.views.view_api import _compute_relay_status
@@ -98,8 +107,11 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         now_local = timezone.localtime()
         now_time = now_local.time()
 
-        # ── GroupConfig ──
-        config = GroupConfig.objects.first()
+        # ── GroupConfig: ambil berdasarkan group_id dari URL ──
+        if self.group_id:
+            config = GroupConfig.objects.filter(id=self.group_id).first()
+        else:
+            config = GroupConfig.objects.first()
 
         if config is None:
             return {
@@ -115,10 +127,13 @@ class DashboardConsumer(AsyncWebsocketConsumer):
 
         status = _compute_relay_status(config, now_time)
 
-        # ── Data sensor terakhir per channel ──
+        # ── Data sensor terakhir per channel (difilter per grup) ──
         channels_data = []
         for ch_num in (1, 2):
-            latest = SensorLog.objects.filter(channel=ch_num).first()
+            latest = SensorLog.objects.filter(
+                group_config=config,
+                channel=ch_num,
+            ).first()
             if latest:
                 channels_data.append({
                     "channel": ch_num,
@@ -146,9 +161,12 @@ class DashboardConsumer(AsyncWebsocketConsumer):
                     "updated_at": None,
                 })
 
-        # ── Notifikasi aktif ──
+        # ── Notifikasi aktif (difilter per grup) ──
         active_alerts = list(
-            NotificationLog.objects.filter(status="active").values(
+            NotificationLog.objects.filter(
+                group_config=config,
+                status="active",
+            ).values(
                 "id", "channel", "type", "message", "created_at"
             )
         )

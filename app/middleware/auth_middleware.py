@@ -1,11 +1,13 @@
 from django.utils.deprecation import MiddlewareMixin
 from django.shortcuts import redirect
 
-# URL yang boleh diakses tanpa login
+# URL yang boleh diakses tanpa login (dipanggil ESP32, tidak punya session)
 EXEMPT_URLS = [
     '/api/relay-status',
     '/api/sensor-data',
     '/api/efficiency-summary',
+    # Catatan: /api/efficiency-data TIDAK di-exempt karena hanya dipanggil
+    # dari browser dashboard (user sudah login).
 ]
 
 

@@ -152,7 +152,7 @@ def settings_view(request):
 
 
 def _broadcast_config_update(config):
-    """Broadcast perubahan konfigurasi ke dashboard via WebSocket."""
+    """Broadcast perubahan konfigurasi ke dashboard grup terkait via WebSocket."""
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
@@ -160,6 +160,7 @@ def _broadcast_config_update(config):
     ws_data = {
         "type": "config_update",
         "config": {
+            "group_id": config.id,
             "name": config.name,
             "data_send_interval": config.data_send_interval,
             "is_active": config.is_active,
@@ -171,8 +172,10 @@ def _broadcast_config_update(config):
         },
     }
 
+    # Broadcast ke group channel spesifik grup yang diubah
+    ws_group = f"dashboard_{config.id}"
     async_to_sync(channel_layer.group_send)(
-        "dashboard",
+        ws_group,
         {
             "type": "config_update",
             "data": ws_data,
